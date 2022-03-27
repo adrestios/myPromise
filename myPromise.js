@@ -1,172 +1,143 @@
+const STATUS = {
+  PENDING: 'pending',
+  FULFILLED: 'fulfilled',
+  REJECTED: 'rejected'
+}
+
+let i = 0
 class myPromise {
   constructor(executor) {
-    if (typeof executor !== 'function') {
-      throw new Error(`${executor} is not a function`)
+    this.status = STATUS.PENDING;
+    this.value = undefined;
+    this.reason = undefined;
+
+    this.resolveCallbacks = [];
+    this.rejectCallbacks = [];
+    this.i = ++i
+
+    const resolve = (v) => {
+      if(this.status === STATUS.PENDING) {
+        this.value = v;
+        this.status = STATUS.FULFILLED;
+
+        this.resolveCallbacks.forEach(fn => fn());
+      }
     }
-    self = this
-    self._status = 'pending'
-    self._value = undefined
-    self._onFulfilledCallback = []
-    self._onRejectedCallback = []
-    self.resolve = this._resolve.bind(this)
-    self.reject = this._reject.bind(this)
+
+    const reject = (r) => {
+      if(this.status === STATUS.PENDING) {
+        this.reason = r;
+        this.status = STATUS.REJECTED;
+
+        this.rejectCallbacks.forEach(fn => fn());
+      }
+    }
+
     try {
-      executor(this._resolve, this._reject)
-    } catch(e) {
-      this.reject(e)
+      executor(resolve, reject);
+    } catch (error) {
+      reject(error);
     }
   }
-  _resolve(value) {
-    setTimeout(() => {debugger
-      if (self._status === 'pending') {
-        self._status = 'fulfilled'
-        self._value = value
-      }
-      for(var i = 0; i < self._onFulfilledCallback.length; i++) {
-        self._onFulfilledCallback[i](value)
-      }
-    })
-  }
-  _reject(err) {
-    setTimeout(() => {
-      if (self._status === 'pending') {
-        self._status = 'rejected'
-        self._value = err
-      }
-      for (var i = 0; i < self._onRejectedCallback.length; i++) {
-        self._onRejectedCallback[i](reason)
-      }
-    })
-  }
-  //resolvePromise(promise, x, resolve, reject) {
-  //  if (promise === x) {
-  //    throw new TypeError('promise and x can not refer to the same object')
-  //  }
-  //  if (x instanceof myPromise) {
-  //    if (x.status === 'pending') {
-  //      x.then(v=> {
-  //        resolvePromise(promise, v, resolve, reject)
-  //      }, )
-  //    }
-  //  }
-  //  if ((x !== null) && ((typeof x === 'object') || (typeof x === 'function'))) {
-  //    try {
-  //    let then = x.then
-  //      if (typeof then = 'function') {
-  //        then.call(x, )
-  //      }
-  //    } catch(e) {
-  //      reject(e)
-  //    }
-  //  }
-  //}
-  then(onResolved, onRejected) {debugger
-    var self = this
-    onResolved = typeof onResolved === 'function' ? onResolved : v => v
-    onRejected = typeof onRejected === 'function' ? onRejected : r => {throw r}
-    if (self._status === 'fulfilled') {
-      return new myPromise((resolve, reject) => {
+
+  then(onResolved, onRejected) {
+    const _onResolved = typeof onResolved === 'function' ? onResolved : value => value;
+    const _onRejected = typeof onRejected === 'function' ? onRejected : reason => { throw reason; };
+
+    const promise2 = new myPromise((resolve, reject) => {
+      if(this.status === STATUS.REJECTED) {
         setTimeout(() => {
           try {
-            var x = onResolved(self._value)
-            if (x instanceof myPromise) {
-              x.then(resolve, reject)
-            }
-            resolve(x)
-          } catch(e) {
-            reject(e)
-          }
-        })
-      })
-    }
-    if (self._status === 'rejected') {
-      return new myPromise((resolve, reject) => {
+            const reason = _onRejected(this.reason);
+            resolvePromise(promise2, reason, resolve, reject);
+          } catch (error) {
+            reject(error);
+          } 
+        });
+      };
+      if(this.status === STATUS.FULFILLED) {
         setTimeout(() => {
           try {
-            var x = onRejected(self._value)
-            if (x instanceof myPromise) {
-              x.then(resolve, reject)
+            const value = _onResolved(this.value)
+            resolvePromise(promise2, value, resolve, reject);
+          } catch (error) {
+            reject(error);
+          } 
+        });
+      }
+      if(this.status === STATUS.PENDING) {
+        this.resolveCallbacks.push(() => {
+          setTimeout(() => {
+            try {
+              const value = _onResolved(this.value)
+              resolvePromise(promise2, value, resolve, reject);
+            } catch (error) {
+              reject(error);
             }
-          } catch(e) {
-            reject(e)
-          }
-        })
-      })
-    }
-    if (self._status === 'pending') {
-      return new myPromise((resolve, reject) => {
-        self._onFulfilledCallback.push((value) => {
-          try {
-            var pv = onResolved(self._value)
-            if (pv instanceof myPromise) {
-              pv.then(resolve, reject)
-            }
-          } catch(e) {
-            reject(e)
-          }
-        })
-        self._onRejectedCallback.push((err) => {
-          try {
-            var pv = onRejected(self._value)
-            if (pv instanceof myPromise) {
-              pv.then(resolve, reject)
-            }
-          } catch(e) {
-            reject(e)
-          }
-        })
-      })
-    }
-  }
-  catch(onRejected) {
-    return this.then(undefined, onRejected)
-  }
-  finally(onFinally) {
-    return this.then(value => {
-      setTimeout(onFinally)
-      return value
-    }, reason => {
-      setTimeout(onFinally)
-      throw reason
-    }) 
-  }
-  static resolve(value) {
-    if (value instanceof myPromise) {
-      return value
-    }
-    return new myPromise(resolve => resolve(value))
-  }
-  static reject(value) {
-    if (value instanceof myPromise) {
-      return value
-    }
-    return new myPromise((resolve, reject) => reject(value))
-  }
-  static all(list) {
-    return new myPromise((resolve, reject) => {
-      let listLength = list.length
-      let resolvedValue = []
-      for (let [index, value] of list.entries()) {
-        this.resolve(value).then(value => {
-          resolvedValue[index] = value
-        if (index === listLength - 1) {
-          resolve(resolvedValue)
-        }
-        }, e => {
-          reject(e)
+          });
+        });
+        this.rejectCallbacks.push(() => {
+          setTimeout(() => {
+            try {
+              const reason = _onRejected(this.reason);
+              resolvePromise(promise2, reason, resolve, reject);
+            } catch (error) {
+              reject(error);
+            } 
+          });
         })
       }
-    })
+    });
+    return promise2;
   }
-  static race(list) {
-    return new myPromise((resolve, reject) => {
-      for (let value of list) {
-        this.resolve(value).then(value => {
-          resolve(value)
-        }, e => {
-          reject(e)
-        })
-      }
-    })
+
+  catch(reject) {
+    return this.then(null, reject);
   }
 }
+
+function resolvePromise(promise, x, resolve, reject) {
+  if(promise === x) {
+    reject(new TypeError('chaining xxx'))
+  }
+  let called;
+  if((typeof x === 'object' && x !== null) || (typeof x === 'function')) {
+    try {
+      const then = x.then;
+      if(typeof then === 'function') {
+        then.call(x, y => {
+          if(!called) {
+            called = true;
+            resolvePromise(promise, y, resolve, reject);
+          }
+        }, r => {
+          if(!called) {
+            called = true;
+            reject(r);
+          }
+        })
+      } else {
+        resolve(x);
+      }
+      
+    } catch (error) {
+      if(!called) {
+        called = true;
+        reject(error);
+      }
+    }
+  } else {
+    resolve(x);
+  }
+}
+
+myPromise.defer = myPromise.deferred = function () {
+  let dfd = {};
+  dfd.promise = new myPromise((resolve,reject)=>{
+      dfd.resolve = resolve;
+      dfd.reject = reject;
+  })
+  return dfd;
+}
+
+module.exports = myPromise;
